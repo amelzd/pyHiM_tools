@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import SimpleITK as sitk
 from scipy import ndimage
+from scipy.signal import correlate, correlation_lags
 
 
 def read_image(path: str) -> Tuple[sitk.Image, np.ndarray]:
@@ -56,6 +57,25 @@ def propose_z_shift(ref_range: Tuple[int, int], target_range: Tuple[int, int]) -
     ref_center = 0.5 * (ref_range[0] + ref_range[1])
     target_center = 0.5 * (target_range[0] + target_range[1])
     return int(round(ref_center - target_center))
+
+
+def cross_correlation_z_shift(ref_profile: np.ndarray, target_profile: np.ndarray) -> int:
+    """Estimate z-shift by maximizing cross-correlation between two 1D profiles.
+
+    A positive shift means the target stack needs to be moved towards higher z indices
+    (rolled forward) to best align with the reference profile.
+    """
+
+    if ref_profile.size == 0 or target_profile.size == 0:
+        return 0
+
+    ref_centered = ref_profile - np.mean(ref_profile)
+    target_centered = target_profile - np.mean(target_profile)
+
+    corr = correlate(ref_centered, target_centered, mode="full")
+    lags = correlation_lags(ref_centered.size, target_centered.size, mode="full")
+    best_lag = int(lags[int(np.argmax(corr))])
+    return best_lag
 
 
 def apply_z_shift(image_np: np.ndarray, shift: int) -> np.ndarray:
@@ -151,7 +171,7 @@ def main() -> None:
     )
     print(f"Saved initial range plot to {range_plot}")
 
-    proposed_shift = propose_z_shift(ref_range, target_range)
+    proposed_shift = cross_correlation_z_shift(ref_profile, target_profile)
     shifted_target_np = apply_z_shift(target_np, proposed_shift)
     shifted_profile = laplacian_variance_profile(shifted_target_np)
     shifted_range = estimate_imaging_range(shifted_profile, args.threshold)
@@ -164,7 +184,7 @@ def main() -> None:
         adjusted_plot,
         ranges=[ref_range, shifted_range],
     )
-    print(f"Proposed z-shift based on imaging ranges: {proposed_shift}")
+    print(f"Proposed z-shift based on profile cross-correlation: {proposed_shift}")
     print(f"Saved shifted range plot to {adjusted_plot}")
 
     cc_shift = estimate_z_shift_cross_correlation(ref_image, target_image)
