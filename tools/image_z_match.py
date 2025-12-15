@@ -22,11 +22,19 @@ def read_image(path: str) -> Tuple[sitk.Image, np.ndarray]:
 
 def laplacian_variance_profile(image_np: np.ndarray) -> np.ndarray:
     """Compute the Laplacian variance profile for a 3D stack (z, y, x)."""
+
+    """ 
     variances = []
     for plane in image_np:
         lap = ndimage.laplace(plane.astype(np.float32))
         variances.append(np.var(lap))
-    return np.asarray(variances)
+    """
+    from skimage import filters
+
+    raw_images = [image_np[i, :, :] for i in range(image_np.shape[0])]
+    laplacian_variance = [np.var(filters.laplace(img)) for img in raw_images]
+    laplacian_variance = laplacian_variance / max(laplacian_variance)
+    return np.asarray(laplacian_variance)
 
 
 def estimate_imaging_range(profile: np.ndarray, threshold_ratio: float = 0.1) -> Tuple[int, int]:
