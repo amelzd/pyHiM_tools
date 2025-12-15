@@ -133,7 +133,18 @@ def estimate_z_shift_cross_correlation(ref_image: sitk.Image, target_image: sitk
     )
     registration.SetOptimizerScales([1.0, 1.0, 1.0])
     final_transform = registration.Execute(ref_image, target_image)
-    return final_transform.GetOffset()[2]
+
+    # CompositeTransform objects returned by SimpleITK do not expose GetOffset(),
+    # so fall back to their parameter vector (dx, dy, dz) when needed.
+    if hasattr(final_transform, "GetOffset"):
+        offset = final_transform.GetOffset()
+    else:
+        offset = final_transform.GetParameters()
+
+    if len(offset) < 3:
+        return 0.0
+
+    return float(offset[2])
 
 
 def summarize_range(range_tuple: Tuple[int, int]) -> str:
