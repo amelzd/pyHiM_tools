@@ -95,6 +95,11 @@ def plot_profiles(
 
 def estimate_z_shift_cross_correlation(ref_image: sitk.Image, target_image: sitk.Image) -> float:
     """Estimate z-shift using SimpleITK correlation metric in a translation-only registration."""
+    # Cast images to a floating type because the correlation metric does not
+    # support unsigned 16-bit inputs.
+    ref_image = sitk.Cast(ref_image, sitk.sitkFloat32)
+    target_image = sitk.Cast(target_image, sitk.sitkFloat32)
+
     registration = sitk.ImageRegistrationMethod()
     registration.SetMetricAsCorrelation()
     transform = sitk.TranslationTransform(ref_image.GetDimension())
