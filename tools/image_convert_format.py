@@ -24,10 +24,6 @@ def read_image(file_path):
     """Read a SimpleITK image from a file."""
     return sitk.ReadImage(file_path)
 
-def write_image(image, file_path):
-    """Write a SimpleITK image to a file."""
-    sitk.WriteImage(image, file_path)
-
 def read_hdf5(file_path):
     """Read a SimpleITK image from an HDF5 file."""
     with h5py.File(file_path, 'r') as h5_file:
@@ -57,6 +53,19 @@ def write_hdf5(image, file_path):
     
     print(f"Converted image saved to {file_path}")
 
+def write_image(image, file_path):
+    """Write a SimpleITK image to a file."""
+    sitk.WriteImage(image, file_path)
+
+def write_npy(image, file_path):
+    """Write a SimpleITK image to an NPY file."""
+
+    # Convert to NumPy array
+    arr = sitk.GetArrayFromImage(image)
+
+    # Save as .npy
+    np.save(file_path, arr)
+
 def get_file_extension(file_path):
     """Get the file extension of a file, including double extensions like .nii.gz."""
     base, ext = os.path.splitext(file_path)
@@ -72,7 +81,7 @@ def main():
     # Set up argument parser
     parser = argparse.ArgumentParser(description="Convert between 3D TIF, HDF5, and NIfTI formats using SimpleITK and h5py.")
     parser.add_argument('--input', required=True, help='Path to the input image file (TIF, HDF5, or NIfTI format).')
-    parser.add_argument('--output', required=True, help='Path to the output image file (TIF, HDF5, or NIfTI format).')
+    parser.add_argument('--output', required=True, help='Path to the output image file (TIF, HDF5, NPY, or NIfTI format).')
 
     args = parser.parse_args()
 
@@ -99,6 +108,9 @@ def main():
     elif output_extension in ['.h5', '.hdf5']:
         # Write the image to HDF5 format
         write_hdf5(input_image, args.output)
+    elif output_extension in ['.npy']:
+        # Write the image to NIfTI format
+        write_npy(input_image, args.output)
     elif output_extension in ['.nii', '.nii.gz']:
         # Write the image to NIfTI format
         write_image(input_image, args.output)
