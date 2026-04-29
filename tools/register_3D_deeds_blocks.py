@@ -46,6 +46,7 @@ import psutil
 import h5py
 import os, sys
 import time
+import json
 import matplotlib.pyplot as plt
 from scipy.ndimage import shift as shift_image
 from deeds import registration_imwarp_fields
@@ -584,8 +585,42 @@ def plots_normalized_images(image_ref, image_ref_0, image_3d_0, image_3d, path_n
 
     print(f"$ saved: {path_name_normalized}")    
     fig1.savefig(path_name_normalized)
-    
-    
+
+def metrics_sitk(fixed_image, registered_image, displacement_field_sitk, displacement_field_np):
+    # assert fixed_image.GetSize() == registered_image_sitk.GetSize()
+    # assert displacement_field_sitk.GetSize() == fixed_image.GetSize()
+    # Mean Squares
+    metric = sitk.ImageRegistrationMethod()
+    metric.SetMetricAsMeanSquares()
+    metric.SetMetricSamplingStrategy(metric.NONE)
+    mse = metric.MetricEvaluate(fixed_image, registered_image)
+
+    # Mutual information
+    metric = sitk.ImageRegistrationMethod()
+    metric.SetMetricAsMattesMutualInformation(50)
+    metric.SetMetricSamplingStrategy(metric.RANDOM)
+    metric.SetMetricSamplingPercentage(0.2)
+    metric.SetInterpolator(sitk.sitkLinear)
+    mi = metric.MetricEvaluate(fixed_image, registered_image)
+
+    # Jacobian matrix
+    jacobian = sitk.DisplacementFieldJacobianDeterminantFilter().Execute(displacement_field_sitk)
+    jac_np = sitk.GetArrayFromImage(jacobian)
+
+    # Displacement field magnitude
+    mag = np.sqrt(np.sum(displacement_field_np**2, axis=-1))
+
+    return {
+        "mse": float(mse),
+        "mutual_information": float(mi),
+        "jacobian_mean": float(np.mean(jac_np)),
+        "jacobian_min": float(np.min(jac_np)),
+        "jacobian_negative_fraction": float(np.mean(jac_np < 0)),
+        "disp_mean": float(np.mean(mag)),
+        "disp_max": float(np.max(mag)),
+        "disp_std": float(np.std(mag)),
+    }    
+
 def main():
     parser = argparse.ArgumentParser(description="Align two 3D images using DEEDS with block-wise processing.")
     parser.add_argument('--reference', required=True, help='Path to the reference (fixed) image file.')
@@ -683,12 +718,39 @@ def main():
     plot_deformation_intensity_xyz(displacement_fields_np, z_plane, png_path)
     plot_deformation_direction(displacement_fields_np, z_plane, png_path)
 
-    if args.smooth_DF>0.0:
-        plot_deformation_intensity_xyz(smoothed_displacement_fields_np, z_plane, png_path.split('.')[0] + "_smoothed")
+    #if args.smooth_DF>0.0:
+       # plot_deformation_intensity_xyz(smoothed_displacement_fields_np, z_plane, png_path.split('.')[0] + "_smoothed")
 
     # Calculate the elapsed time
     elapsed_time = time.time() - start_time
     print(f'$ Finished in {elapsed_time} s')
+
+    # metrics
+    metrics = metrics_sitk( fixed_image=fixed_image,
+    registered_image=registered_image_sitk,
+    displacement_field_sitk=displacement_field_sitk,
+    displacement_field_np=displacement_fields_np)
+    
+    # json metrics
+    results = {
+    "metrics": metrics,
+    "execution_time_seconds": float(elapsed_time),
+    "image_shape": list(fixed_image_np.shape),
+    "parameters": {
+        "alpha": args.alpha,
+        "levels": args.levels,
+        "factors": args.factors,
+        "binning_xy": args.binning_factor_xy,
+        "binning_z": args.binning_factor_z,
+        "smoothing": args.smooth_DF
+    }}
+
+    json_path = args.output + "_metrics.json"
+
+    with open(json_path, "w") as f:
+        json.dump(results, f, indent=4)
+
+    print(f"Metrics saved to {json_path}")
 
 if __name__ == "__main__":
     main()
