@@ -394,7 +394,7 @@ def apply_displacement_field(image, displacement_field):
     resampler.SetInterpolator(sitk.sitkLinear)
     resampler.SetDefaultPixelValue(0)
     resampler.SetTransform(sitk.DisplacementFieldTransform(displacement_field))
-    
+    resampler.SetOutputPixelType(sitk.sitkFloat32)
     deformed_image = resampler.Execute(image)
     return deformed_image
     
@@ -471,7 +471,7 @@ def plots_normalized_images(image_ref, image_ref_0, image_3d_0, image_3d, path_n
 
     print(f"$ saved: {path_name_normalized}")    
     fig1.savefig(path_name_normalized)
-
+ 
 
 
 def main():
