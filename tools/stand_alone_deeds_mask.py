@@ -379,6 +379,29 @@ def applyDF(new_image_np, displacement_fields_np, reference_shape):
     warped_new_np = sitk_warp(new_image_np, displacement_fields_np)
     return warped_new_np
     
+def apply_displacement_field(image, displacement_field):
+    """
+    Apply the displacement field to the input image.
+    
+    Parameters:
+    image (SimpleITK.Image): The input image.
+    displacement_field (SimpleITK.Image): The displacement field.
+
+    Returns:
+    SimpleITK.Image: The deformed image.
+    """
+    # Cast the displacement field to the required type
+    displacement_field = sitk.Cast(displacement_field, sitk.sitkVectorFloat64)
+
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetReferenceImage(image)
+    resampler.SetInterpolator(sitk.sitkLinear)
+    resampler.SetDefaultPixelValue(0)
+    resampler.SetTransform(sitk.DisplacementFieldTransform(displacement_field))
+    
+    deformed_image = resampler.Execute(image)
+    return deformed_image
+    
 class BothImgRbgFile:
     def __init__(self, image1, image2, tag='', title=''):
         self.image1 = image1
