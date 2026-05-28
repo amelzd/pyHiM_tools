@@ -227,7 +227,7 @@ def process_blocks(fixed_image_np, moving_image_np, args, original_shape=None):
     
     for i, (fixed_block, moving_block) in enumerate(zip(fixed_blocks, moving_blocks)):
         print(f"Processing block {i + 1}/{len(fixed_blocks)} of size {fixed_block.shape}")
-
+        # DEEDS correction
         moved, vz, vy, vx = calculates_deformation(fixed_block, moving_block, args, method='DEEDs')
         registered_blocks.append(moved)
         displacement_fields_vz.append(vz)
@@ -304,7 +304,6 @@ def plot_deformation_intensity(displacement_field, z_plane, output_prefix):
     plt.show()
 
 def plot_deformation_intensity_xyz(displacement_field, z_plane, output_prefix):
-
     data = compute_intensity(displacement_field, z_plane)
     titles = ["dx^2+dx^2+dz^2", "dx", "dy", "dz"]
 
