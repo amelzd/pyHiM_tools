@@ -365,19 +365,15 @@ def sitk_warp(image_np, df_np):
 
     return sitk.GetArrayFromImage(warped)
     
-def applyDF(new_image_np, displacement_fields_np, reference_shape):
+#def applyDF(new_image_np, displacement_fields_np, reference_shape):
     #  resample new image to match DF grid
-    new_image_np = zoom(
-        new_image_np,
-        (
-            reference_shape[0] / new_image_np.shape[0],
-            reference_shape[1] / new_image_np.shape[1],
-            reference_shape[2] / new_image_np.shape[2],
-        ),
-        order=1)
+    #new_image_np = zoom(  new_image_np,(
+            #reference_shape[0] / new_image_np.shape[0],
+            #reference_shape[1] / new_image_np.shape[1],
+            #reference_shape[2] / new_image_np.shape[2],),order=1)
     #  apply deformation field
-    warped_new_np = sitk_warp(new_image_np, displacement_fields_np)
-    return warped_new_np
+    #warped_new_np = sitk_warp(new_image_np, displacement_fields_np)
+    #return warped_new_np
     
 def apply_displacement_field(image, displacement_field):
     """
