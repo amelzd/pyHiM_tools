@@ -395,6 +395,7 @@ def apply_displacement_field(image, displacement_field):
     resampler.SetDefaultPixelValue(0)
     resampler.SetTransform(sitk.DisplacementFieldTransform(displacement_field))
     resampler.SetOutputPixelType(sitk.sitkFloat32)
+     ### original image are in uint16 or u32int
     deformed_image = resampler.Execute(image)
     return deformed_image
     
