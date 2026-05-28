@@ -460,6 +460,7 @@ def main():
     parser = argparse.ArgumentParser(description="Align two 3D images using DEEDS with block-wise processing.")
     parser.add_argument('--reference', required=True, help='Path to the reference (fixed) image file.')
     parser.add_argument('--moving', required=True, help='Path to the moving image file.')
+    parser.add_argument('--tomove', required=True, help='Path to the image NUMPY format that needs to be moved with DF.')
     parser.add_argument('--output', required=True, help='Path to the output (aligned) image file.')
     parser.add_argument('--png_folder', default='', help='Path to the folder that will hold png output files.')
     parser.add_argument('--displacement_field', required=True, help='Path to save the displacement field image file.')
@@ -484,7 +485,7 @@ def main():
 
     # loads images into memory
     check_file_existence(args.reference, args.moving)
-
+    
     fixed_image = read_image(args.reference)
     moving_image = read_image(args.moving)
 
@@ -492,8 +493,6 @@ def main():
     moving_image_np_0 = to_numpy(moving_image)
     
     original_shape = fixed_image_np_0.shape
-
-    print_memory_usage("Before preprocessing")
 
     # pre-processes images
     fixed_image_np, moving_image_np = preprocess_images(fixed_image_np_0, moving_image_np_0, args)
@@ -504,11 +503,10 @@ def main():
     plots_normalized_images(fixed_image_np_0, fixed_image_np, moving_image_np_0, moving_image_np, png_path.split('.')[0] + "_normalized.png")
 
     # registers images
-    print_memory_usage("Before processing blocks")
     registered_image_np, displacement_fields_np = process_blocks(fixed_image_np, moving_image_np, args)
 
     # Check dimensions after upsampling
-    print(f"$ -->size DF: {displacement_fields_np.shape}")
+    print(f"$ -->size DF, registered_image: {displacement_fields_np.shape, registered_image_np}")
 
     # Ensure we create the displacement field with isVector=True to handle the vector field properly
     displacement_field_sitk = sitk.GetImageFromArray(displacement_fields_np, isVector=True)
@@ -540,13 +538,11 @@ def main():
     if args.smooth_DF>0.0:
         plot_deformation_intensity_xyz(smoothed_displacement_fields_np, z_plane, png_path.split('.')[0] + "_smoothed")
 
-    # apply
-    new_image_np = maskch01.npy
-
-    warped_new_np = applyDF(
-        new_image_np,
+    # apply DF to mask ch01 as numpy
+    registered_image = applyDF(
+        args.tomove,
         displacement_fields_np,
-        fixed_image_np.shape)
+        registered_image.shape)
 
     warped_new_sitk = to_sitk(warped_new_np, ref_img=fixed_image)
     write_image(warped_new_sitk, "name_image_corrected.tif")
