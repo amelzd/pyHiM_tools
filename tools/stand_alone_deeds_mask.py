@@ -428,13 +428,33 @@ def plots_normalized_images(image_ref, image_ref_0, image_3d_0, image_3d, path_n
     print(f"$ saved: {path_name_normalized}")    
     fig1.savefig(path_name_normalized)
 
-
 def sitk_warp(image_np, df_np):
     image = sitk.GetImageFromArray(image_np.astype(np.float32))
     field = sitk.GetImageFromArray(df_np.astype(np.float32), isVector=True)
 
-    warped = sitk.WarpImageFilter().Execute(image, field)
+    warp_filter = sitk.WarpImageFilter()
+    warp_filter.SetInterpolator(sitk.sitkLinear)
+
+    warped = warp_filter.Execute(image, field)
+
     return sitk.GetArrayFromImage(warped)
+    
+def applyDF(new_image_np, displacement_fields_np, reference_shape):
+    #  resample new image to match DF grid
+    new_image_np = zoom(
+        new_image_np,
+        (
+            reference_shape[0] / new_image_np.shape[0],
+            reference_shape[1] / new_image_np.shape[1],
+            reference_shape[2] / new_image_np.shape[2],
+        ),
+        order=1
+    )
+
+    #  apply deformation field
+    warped_new_np = sitk_warp(new_image_np, displacement_fields_np)
+
+    return warped_new_np
 
 def main():
     parser = argparse.ArgumentParser(description="Align two 3D images using DEEDS with block-wise processing.")
@@ -520,9 +540,16 @@ def main():
     if args.smooth_DF>0.0:
         plot_deformation_intensity_xyz(smoothed_displacement_fields_np, z_plane, png_path.split('.')[0] + "_smoothed")
 
-    # Calculate the elapsed time
-    elapsed_time = time.time() - start_time
-    print(f'$ Finished in {elapsed_time} s')
+    # apply
+    new_image_np = maskch01.npy
+
+    warped_new_np = applyDF(
+        new_image_np,
+        displacement_fields_np,
+        fixed_image_np.shape)
+
+    warped_new_sitk = to_sitk(warped_new_np, ref_img=fixed_image)
+    write_image(warped_new_sitk, "name_image_corrected.tif")
 
 if __name__ == "__main__":
     main()
