@@ -388,7 +388,7 @@ def apply_displacement_field(image, displacement_field):
     """
     # Cast the displacement field to the required type
     displacement_field = sitk.Cast(displacement_field, sitk.sitkVectorFloat64)
-
+    #### apply to npy ???
     resampler = sitk.ResampleImageFilter()
     resampler.SetReferenceImage(image)
     resampler.SetInterpolator(sitk.sitkLinear)
