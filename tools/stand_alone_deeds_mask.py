@@ -17,6 +17,32 @@ import matplotlib.colors as mcolors
 from scipy.ndimage import gaussian_filter
 from scipy.ndimage import zoom
 
+
+##### reading writing and sitk format #####"
+def read_image(file_path):
+    return sitk.ReadImage(file_path)
+
+def write_image(image, file_path):
+    sitk.WriteImage(image, file_path)
+
+def to_numpy(img):
+    return sitk.GetArrayFromImage(img)
+
+def to_sitk(img, ref_img=None):
+    img = sitk.GetImageFromArray(img.astype(np.float32))
+    if ref_img:
+        img.CopyInformation(ref_img)
+    return img
+
+#### pre process image ########
+def check_file_existence(reference, moving):
+    if not os.path.exists(reference):
+        print(f"Error: Reference image file '{reference}' does not exist.")
+        sys.exit(1)
+    if not os.path.exists(moving):
+        print(f"Error: Moving image file '{moving}' does not exist.")
+        sys.exit(1)
+        
 def reinterpolate_z(image_3d, z_range, mode='remove'):
     output = np.zeros((len(z_range), image_3d.shape[1], image_3d.shape[2]), dtype=image_3d.dtype)
     for i, index in enumerate(z_range):
@@ -71,17 +97,28 @@ def preprocess_3d_image(x, lower_threshold, higher_threshold, parallel_execution
     image = image_adjust(image, lower_threshold, higher_threshold)[0]
     return image
 
-def read_image(file_path):
-    return sitk.ReadImage(file_path)
+def preprocess_images(fixed_image_np, moving_image_np, args):
+    print(f"$ Shifting image using: {args.shifts}")
+    
+    shift_3d = np.zeros((3))
+    shift_3d[0], shift_3d[1], shift_3d[2] = args.shifts[2], args.shifts[0], args.shifts[1]
+    
+    moving_image_np = shift_image(moving_image_np, shift_3d)
 
-def write_image(image, file_path):
-    sitk.WriteImage(image, file_path)
+    # Apply binning if necessary
+    if args.binning_factor_xy > 1 or args.binning_factor_z > 1:
+        print(f"$ Applying binning to images: XY binning={args.binning_factor_xy}, Z binning={args.binning_factor_z}")
+        zoom_factors = [1/args.binning_factor_z, 1/args.binning_factor_xy, 1/args.binning_factor_xy]
+        fixed_image_np = zoom(fixed_image_np, zoom_factors, order=1)
+        moving_image_np = zoom(moving_image_np, zoom_factors, order=1)
 
-def print_memory_usage(step):
-    process = psutil.Process()
-    memory_info = process.memory_info()
-    print(f"{step} - Memory usage: {memory_info.rss / (1024 * 1024):.2f} MB")
-
+    print(f"$ Preprocessing images with z_binning={args.z_binning}, lower_threshold={args.lower_threshold}, higher_threshold={args.higher_threshold}")
+    fixed_image_np = preprocess_3d_image(fixed_image_np, args.lower_threshold, args.higher_threshold)
+    moving_image_np = preprocess_3d_image(moving_image_np, args.lower_threshold, args.higher_threshold)
+    
+    return fixed_image_np, moving_image_np
+    
+#### blocks#####
 def split_image(image_np, factors):
     z_size = image_np.shape[0]
     y_size = image_np.shape[1]
@@ -148,15 +185,7 @@ def stitch_blocks(blocks, blocks_shape, block_size, original_shape, is_vector=Fa
             block_index += 1
     return stitched_image
 
-def to_numpy(img):
-    return sitk.GetArrayFromImage(img)
-
-def to_sitk(img, ref_img=None):
-    img = sitk.GetImageFromArray(img.astype(np.float32))
-    if ref_img:
-        img.CopyInformation(ref_img)
-    return img
-
+############ DF ################"""
 def write_displacement_field(displacement_field, file_path, format):
     if format == 'tif':
         sitk.WriteImage(displacement_field, file_path)
@@ -172,41 +201,13 @@ def write_displacement_field(displacement_field, file_path, format):
     else:
         raise ValueError("Unsupported file format for displacement field.")
 
-def check_file_existence(reference, moving):
-    if not os.path.exists(reference):
-        print(f"Error: Reference image file '{reference}' does not exist.")
-        sys.exit(1)
-    if not os.path.exists(moving):
-        print(f"Error: Moving image file '{moving}' does not exist.")
-        sys.exit(1)
 
 def calculates_deformation(reference, moving, args, method = 'DEEDs'):
-    
     if method=='DEEDs':
         moved, vz, vy, vx = registration_imwarp_fields(reference, moving, alpha=args.alpha, levels=args.levels, verbose=args.verbose)
 
     return moved, vz, vy, vx
 
-def preprocess_images(fixed_image_np, moving_image_np, args):
-    print(f"$ Shifting image using: {args.shifts}")
-    
-    shift_3d = np.zeros((3))
-    shift_3d[0], shift_3d[1], shift_3d[2] = args.shifts[2], args.shifts[0], args.shifts[1]
-    
-    moving_image_np = shift_image(moving_image_np, shift_3d)
-
-    # Apply binning if necessary
-    if args.binning_factor_xy > 1 or args.binning_factor_z > 1:
-        print(f"$ Applying binning to images: XY binning={args.binning_factor_xy}, Z binning={args.binning_factor_z}")
-        zoom_factors = [1/args.binning_factor_z, 1/args.binning_factor_xy, 1/args.binning_factor_xy]
-        fixed_image_np = zoom(fixed_image_np, zoom_factors, order=1)
-        moving_image_np = zoom(moving_image_np, zoom_factors, order=1)
-
-    print(f"$ Preprocessing images with z_binning={args.z_binning}, lower_threshold={args.lower_threshold}, higher_threshold={args.higher_threshold}")
-    fixed_image_np = preprocess_3d_image(fixed_image_np, args.lower_threshold, args.higher_threshold)
-    moving_image_np = preprocess_3d_image(moving_image_np, args.lower_threshold, args.higher_threshold)
-    
-    return fixed_image_np, moving_image_np
 
 def process_blocks(fixed_image_np, moving_image_np, args, original_shape=None):
     # Original shape to be used for upsampling
@@ -354,6 +355,31 @@ def plot_deformation_direction(displacement_field, z_plane, output_prefix):
     plt.savefig(f"{output_prefix}_DF_direction_z{z_plane}.png")
     plt.show()
 
+#### apply DF ####
+def sitk_warp(image_np, df_np):
+    image = sitk.GetImageFromArray(image_np.astype(np.float32))
+    field = sitk.GetImageFromArray(df_np.astype(np.float32), isVector=True)
+    warp_filter = sitk.WarpImageFilter()
+    warp_filter.SetInterpolator(sitk.sitkLinear)
+
+    warped = warp_filter.Execute(image, field)
+
+    return sitk.GetArrayFromImage(warped)
+    
+def applyDF(new_image_np, displacement_fields_np, reference_shape):
+    #  resample new image to match DF grid
+    new_image_np = zoom(
+        new_image_np,
+        (
+            reference_shape[0] / new_image_np.shape[0],
+            reference_shape[1] / new_image_np.shape[1],
+            reference_shape[2] / new_image_np.shape[2],
+        ),
+        order=1)
+    #  apply deformation field
+    warped_new_np = sitk_warp(new_image_np, displacement_fields_np)
+    return warped_new_np
+    
 class BothImgRbgFile:
     def __init__(self, image1, image2, tag='', title=''):
         self.image1 = image1
@@ -428,33 +454,7 @@ def plots_normalized_images(image_ref, image_ref_0, image_3d_0, image_3d, path_n
     print(f"$ saved: {path_name_normalized}")    
     fig1.savefig(path_name_normalized)
 
-def sitk_warp(image_np, df_np):
-    image = sitk.GetImageFromArray(image_np.astype(np.float32))
-    field = sitk.GetImageFromArray(df_np.astype(np.float32), isVector=True)
 
-    warp_filter = sitk.WarpImageFilter()
-    warp_filter.SetInterpolator(sitk.sitkLinear)
-
-    warped = warp_filter.Execute(image, field)
-
-    return sitk.GetArrayFromImage(warped)
-    
-def applyDF(new_image_np, displacement_fields_np, reference_shape):
-    #  resample new image to match DF grid
-    new_image_np = zoom(
-        new_image_np,
-        (
-            reference_shape[0] / new_image_np.shape[0],
-            reference_shape[1] / new_image_np.shape[1],
-            reference_shape[2] / new_image_np.shape[2],
-        ),
-        order=1
-    )
-
-    #  apply deformation field
-    warped_new_np = sitk_warp(new_image_np, displacement_fields_np)
-
-    return warped_new_np
 
 def main():
     parser = argparse.ArgumentParser(description="Align two 3D images using DEEDS with block-wise processing.")
